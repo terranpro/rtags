@@ -27,7 +27,7 @@ add_definitions(-Wall)
 add_definitions("-DCLANG_INCLUDEPATH=\"${CLANG_SYSTEM_INCLUDE}\"")
 add_definitions("-DCLANG_VERSION_MAJOR=${CLANG_VERSION_MAJOR}")
 add_definitions("-DCLANG_VERSION_MINOR=${CLANG_VERSION_MINOR}")
-add_definitions("-DESPRIMA_JS=\"${PROJECT_SOURCE_DIR}/src/esprima/esprima.js\"")
+add_definitions("-DESPRIMA_JS=\"${PROJECT_SOURCE_DIR}/src/rtags-esprima.js\"")
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
