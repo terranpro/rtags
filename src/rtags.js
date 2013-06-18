@@ -1,14 +1,5 @@
 var esrefactorContext = new esrefactor.Context();
 
-var indent = 0;
-function indentString()
-{
-    var ret = "";
-    for (var i=0; i<indent; ++i) {
-        ret += "  ";
-    }
-    return ret;
-}
 function dumpObject(obj)
 {
     for (var key in obj) {
@@ -39,7 +30,7 @@ function indexFile(code, file, cb)
 {
     var parsed = esprima.parse(code, { range: true, tolerant: true });
     if (!parsed) {
-        throw new Error('Couldn\'t parse file ' + file + ' ' + code.length);
+        throw new Error("Couldn't parse file " + file + ' ' + code.length);
         return false;
     }
     esrefactorContext.setCode(parsed);
@@ -54,7 +45,6 @@ function indexFile(code, file, cb)
     log(esrefactorContext._syntax);
 
     scopeManager.attach();
-    var scope = undefined;
     var parents = [];
     function isChild(key, offset)
     {
@@ -74,15 +64,23 @@ function indexFile(code, file, cb)
     }
 
     var scopes = [];
+    var scopeStack = [];
 
-    function add(path, range) {
-        if (path == "constructor") {
-            path = "0constructor"; // heh
+    function add(path, range, declaration) {
+        if (path == "constructor")
+            path = " constructor"; // heh
+        var scope = scopeStack[scopeStack.length - 1];
+        var cur = null;
+        if (!declaration) {
+            for (var i=scopeStack.length - 1; i>=0; --i) {
+                cur = scopeStack[i].objects[path];
+                if (cur) {
+                    // log("Found", path, "in a scope", i, scopeStack.length);
+                    scope = scopeStack[i];
+                    break;
+                }
+            }
         }
-        if (!range || typeof range !== 'object') {
-            throw new Error("busted " + path);
-        }
-        var cur = scope.objects[path];
         if (!cur) {
             range.push(true);
             scope.objects[path] = [range];
@@ -101,20 +99,21 @@ function indexFile(code, file, cb)
                 s.objects = {};
                 s.objectScope = [];
                 scopes.push(s);
-                scope = s;
+                scopeStack.push(s);
             }
             if (node.type == "ObjectExpression") {
                 if (isChild("init") && parentTypeIs("VariableDeclarator")) {
                     node.addedScope = true;
-                    scope.objectScope.push(parents[parents.length - 2].id.name);
+                    scopeStack[scopeStack.length - 1].objectScope.push(parents[parents.length - 2].id.name);
                 } else if (isChild("value") && parentTypeIs("Property")) {
                     node.addedScope = true;
-                    scope.objectScope.push(parents[parents.length - 2].key.name);
+                    scopeStack[scopeStack.length - 1].objectScope.push(parents[parents.length - 2].key.name);
                 }
             } else if (node.type == "MemberExpression") {
                 node.name = resolveName(node);
                 if (node.property.type == "Literal") {
-                    path = scope.objectScope.join(".");
+                    // this one will not show up as an Identifier so we have to add it here
+                    path = scopeStack[scopeStack.length - 1].objectScope.join(".");
                     if (path)
                         path += ".";
                     path += node.name;
@@ -122,108 +121,41 @@ function indexFile(code, file, cb)
                 }
                 // log("got member expression", node.name, node.range);
             } else if (node.type == "Identifier") {
-                path = scope.objectScope.join(".");
+                path = scopeStack[scopeStack.length - 1].objectScope.join(".");
                 if (path)
                     path += ".";
+                var decl = false;
                 if (parentTypeIs("MemberExpression") && isChild("property")) {
                     path += parents[parents.length - 2].name;
                 } else {
+                    if (parentTypeIs("Property") && parentTypeIs("ObjectExpression", parents.length - 2)
+                        && isChild("init", parents.length - 2)) {
+                        decl = true;
+                    } else if (parentTypeIs("VariableDeclarator")) {
+                        decl = true;
+                    }
                     path += node.name;
                 }
-                add(path, node.range);
+                add(path, node.range, decl); // probably more of them that should pass true
                 // log("identifier", path, JSON.stringify(node.range));
             }
         },
         leave: function (node) {
             parents.pop();
             if (node.addedScope)
-                scope.objectScope.pop();
-            scope = scopeManager.release(node) || scope;
+                scopeStack[scopeStack.length - 1].objectScope.pop();
+            if (scopeManager.release(node)) // the scopeManager probably knows enough about this to provide the scopeStack
+                scopeStack.pop();
+
         }
     });
-    // log(byName);
-    // estraverse.traverse(esrefactorContext._syntax, {
-    //     enter: function(node) {
-    //         log(node.type, typeof node.path === 'string' ? node.path : "no path");
-    //     }
-    // });
-
-    for (var s=0; s<scopes.length; ++s) {
-        log(s, scopes[s].objects);
-    }
     scopeManager.detach();
 
-    // var result = lookup(scope, identifier);
-
-    // if (result) {
-    //     // Search for all other identical references (same scope).
-    //     result.references = [];
-    //         scopeManager.attach();
-    //         estraverse.traverse(this._syntax, {
-    //             enter: function (node) {
-    //                 var scope, i, ref, d;
-    //                 scope = scopeManager.acquire(node);
-    //                 for (i = 0; i < (scope ? scope.references.length : 0); ++i) {
-    //                     ref = scope.references[i];
-    //                     if (ref.identifier.name === identifier.name) {
-    //                         d = lookup(scope, ref.identifier);
-    //                         if (d && d.declaration === result.declaration) {
-    //                             result.references.push(ref.identifier);
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         });
-    //         scopeManager.detach();
-    //     }
-
-
-    //     return result;
-    // };
+    var objects = [];
+    for (var s=0; s<scopes.length; ++s) {
+        objects.push(scopes[s].objects);
+        log(s, scopes[s].objects);
+    }
+    cb(objects);
 }
 
-
-        // identifier = identification.identifier;
-        // declaration = identification.declaration;
-        // references = identification.references;
-        // model = editor.getModel();
-
-        // occurrences = [{
-        //     line: identifier.loc.start.line,
-        //     start: 1 + identifier.range[0] - model.getLineStart(identifier.loc.start.line - 1),
-        //     end: identifier.range[1] - model.getLineStart(identifier.loc.start.line - 1),
-        //     readAccess: false,
-        //     description: identifier.name
-        // }];
-
-        // if (declaration) {
-        //     if (declaration.range !== identifier.range) {
-        //         occurrences.push({
-        //             line: declaration.loc.start.line,
-        //             start: 1 + declaration.range[0] - model.getLineStart(declaration.loc.start.line - 1),
-        //             end: declaration.range[1] - model.getLineStart(declaration.loc.start.line - 1),
-        //             readAccess: true,
-        //             description: 'Line ' + declaration.loc.start.line + ': ' + declaration.name
-        //         });
-        //     }
-        //     editor.addErrorMarker(declaration.range[0],
-        //                           'Declaration: ' + declaration.name);
-        //     id('info').innerHTML = 'Identifier \'' + identifier.name + '\' is declared in line ' +
-        //         declaration.loc.start.line + '.';
-        // } else {
-        //     id('info').innerHTML = 'Warning: No declaration is found for \'' + identifier.name + '\'.';
-        // }
-
-        // for (i = 0; i < references.length; ++i) {
-        //     ref = references[i];
-        //     if (ref.range !== identifier.range) {
-        //         occurrences.push({
-        //             line: ref.loc.start.line,
-        //             start: 1 + ref.range[0] - model.getLineStart(ref.loc.start.line - 1),
-        //             end: ref.range[1] - model.getLineStart(ref.loc.start.line - 1),
-        //             readAccess: true,
-        //             description: ref.name
-        //         });
-        //     }
-        // }
-// }
