@@ -18,119 +18,22 @@ function dumpObject(obj)
     }
 }
 
-// function path(scope, parents)
-// {
-//     // if (!parents[parents.length - 1].name) {
-//     //     log("Calling path with no name", node);
-//     // }
-//     var name = [];
 
-//     var prev = undefined;
-//     var done = false;
-//     var types = [];
-//     for (var i=parents.length - 1; i>=0; --i) {
-//         var p = parents[i];
-//         // dumpObject(p);
-//         if (p.type)
-//             types.push(p.type);
-//         if (!done) {
-//             if (p.type == "Identifier") {
-//                 name.unshift(p.name); // + "_1");
-//             } else if (p.type == "VariableDeclarator" && p.id != prev) {
-//                 name.unshift(p.id.name); // + "_2");
-//             } else if (p.type == "ObjectExpression" && prev.type == "Property") {
-//                 var next = parents[i - 1];
-//                 if (next.type == "VariableDeclarator" && next.init == p) {
-//                     name.unshift(path(scope, parents.slice(0, i))); // + "_3");
-//                     done = true;
-//                 }
-//             } else if (p.type == "MemberExpression") {
-//                 if (prev == p.property) {
-//                     name.unshift(path(scope, parents.slice(0, i))); // + "_4");
-//                 } else {
-//                     log("Got here", name.join("."));
-//                 }
-//                 done = true;
-//             }
-//             // log((i + 1) + "/" + parents.length + ": " + p.type + " " + p.name);
-//         }
-//         indent += "  ";
-//         prev = p;
-//     }
-//     if (!name.length) {
-//         log("no name", parents.length, types.join());
-//     }
-//     log(parents.length, name.join("."));
-//     return name.join(".");
-// }
-
-function resolveName(scope, top)
+function resolveName(node)
 {
-    if (!scope || scope.length == 0) {
-        top.path = "";
-        return "";
-    } else if (scope.length == 1) {
-        scope[0].path = "";
-        return "";
-    }
-    var depth = scope.length;
-
-    var parent;
-    if (!top) {
-        top = scope[scope.length - 1];
-        parent = scope[scope.length - 2];
+    if (node.type == "Identifier") {
+        return node.name;
+    } else if (node.type == "MemberExpression") {
+        return resolveName(node.object) + "." + resolveName(node.property);
     } else {
-        parent = scope[scope.length - 1];
-        ++depth;
+        log("Got here", node.object.type);
     }
-    if (top.type == "Identifier") {
-        if (parent && parent.path) {
-            top.path = parent.path + "." + top.name;
-            // log("doing identifier", parent.path, top.name, top.range, top.path);
-        } else {
-            top.path = top.name;
-            // log("doing identifier no parent name", top.name, top.range, top.path, parent.type);
-        }
-    } else if (top.type == "VariableDeclarator") {
-        top.path = parent.path;
-        top.path = resolveName(scope, top.id);
-    } else if (top.type == "MemberExpression") {
-        top.path = parent.path;
-        var old = top.path;
-        top.path = resolveName(scope, top.object) + "." + resolveName(scope, top.property);
-        if (!parent.path && parent.type == "AssignmentExpression") {
-            parent.path = top.path;
-        }
-        // log("doing member expression", top.path, top.range, old);
-    // } else if (top.name == "ExpressionStatement" && prev.type == "AssignmentExpression") {
-    //     log("Got here", top.type, prev ? prev.type : "no prev");
-    //     top.path = parent.path;
-    //     top.path = resolveName(scope, top.expression);
-        // } else if (top.name == "AssignmentExpression") {
-        //     log("Got here 2", top.type, prev ? prev.type : "no prev");
-        //     top.path = parent.path;
-        //     top.path = resolveName(scope, top.left);
-        // } else if (parent.path) {
-        //     log("Got here 3", top.type, prev ? prev.type : "no prev");
-        //     top.path = parent.path;
-        // } else {
-        //     log("Got here 4", top.type, prev ? prev.type : "no prev");
-    } else {
-        top.path = "";
-    }
-    var foo = "";
-    for (var i=0; i<depth; ++i) {
-        foo += "  ";
-    }
-    foo += top.path;
-    log(foo, top.type);
-
-    return top.path;
+    return "";
 }
 
 function indexFile(code, file, cb)
 {
-    var parsed = esprima.parse(code, { loc: true, range: true, tolerant: true });
+    var parsed = esprima.parse(code, { range: true, tolerant: true });
     if (!parsed) {
         throw new Error('Couldn\'t parse file ' + file + ' ' + code.length);
         return false;
@@ -147,32 +50,73 @@ function indexFile(code, file, cb)
     scopeManager.attach();
     var scope = undefined;
     var parents = [];
+    function isChild(key, offset)
+    {
+        if (typeof offset == 'undefined')
+            offset = parents.length - 1;
+        return (offset > 0
+                && parents[offset - 1]
+                && typeof parents[offset - 1][key] != 'undefined'
+                && offset <= parents.length
+                && parents[offset - 1][key] == parents[offset]);
+    }
+    function parentTypeIs(type, offset)
+    {
+        if (typeof offset == 'undefined')
+            offset = parents.length - 1;
+        return (offset > 0 && parents[offset - 1] && parents[offset - 1].type == type);
+    }
+
     var scopes = [];
     var byName = {};
+    var objectScope = [];
+    var objectScopeStack = [];
     estraverse.traverse(esrefactorContext._syntax, {
         enter: function (node) {
             parents.push(node);
-            // var old = scope;
             var s = scopeManager.acquire(node);
             if (s) {
                 s.objects = {};
                 scopes.push(s);
                 scope = s;
             }
-            if (typeof node.path === 'undefined')
-                resolveName(parents);
-            if (node.path.length) { // && node.type == "Identifier") {
-                var val = byName[node.path];
-                if (val) {
-                    val.push(node.range);
-                } else {
-                    node.range.push(node.type);
-                    byName[node.path] = [ node.range ];
+            var addedScope = false;
+            if (node.type == "ObjectExpression") {
+                if (isChild("init") && parentTypeIs("VariableDeclarator")) {
+                    addedScope = true;
+                    objectScope.push(parents[parents.length - 2].id.name);
+                } else if (isChild("value") && parentTypeIs("Property")) {
+                    addedScope = true;
+                    objectScope.push(parents[parents.length - 2].key.name);
                 }
+            } else if (node.type == "MemberExpression") {
+                node.name = resolveName(node);
+                // log("got member expression", node.name, node.range);
+            } else if (node.type == "Identifier") {
+                var path = objectScope.join(".");
+                if (path)
+                    path += ".";
+                if (parentTypeIs("MemberExpression") && isChild("property")) {
+                    path += parents[parents.length - 2].name;
+                } else {
+                    path += node.name;
+                }
+                var cur = scope.objects[path];
+                if (!cur) {
+                    var range = node.range;
+                    range.push(true);
+                    scope.objects[path] = [range];
+                } else {
+                    scope.objects[path].push(node.range);
+                }
+                // log("identifier", path, JSON.stringify(node.range));
             }
+            objectScopeStack.push(addedScope);
         },
         leave: function (node) {
             parents.pop();
+            if (objectScopeStack.pop())
+                objectScope.pop();
             scope = scopeManager.release(node) || scope;
         }
     });
@@ -183,9 +127,9 @@ function indexFile(code, file, cb)
     //     }
     // });
 
-    // for (var s=0; s<scopes.length; ++s) {
-    //     log(s, Object.keys(scopes[s].objects));
-    // }
+    for (var s=0; s<scopes.length; ++s) {
+        log(s, scopes[s].objects);
+    }
     scopeManager.detach();
 
     // var result = lookup(scope, identifier);
