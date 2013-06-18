@@ -25,8 +25,12 @@ function resolveName(node)
         return node.name;
     } else if (node.type == "MemberExpression") {
         return resolveName(node.object) + "." + resolveName(node.property);
+    } else if (node.type == "Literal") {
+        return node.value;
+    } else if (node.type == "ThisExpression") {
+        log("got this here", node);
     } else {
-        log("Got here", node.object.type);
+        log("Got here", node);
     }
     return "";
 }
@@ -46,6 +50,8 @@ function indexFile(code, file, cb)
 
     var scopeManager = esrefactorContext._scopeManager;
     var lookup = esrefactorContext._lookup;
+    // log(JSON.stringify(esrefactorContext._syntax, null, 4));
+    log(esrefactorContext._syntax);
 
     scopeManager.attach();
     var scope = undefined;
@@ -68,32 +74,55 @@ function indexFile(code, file, cb)
     }
 
     var scopes = [];
+
+    function add(path, range) {
+        if (path == "constructor") {
+            path = "0constructor"; // heh
+        }
+        if (!range || typeof range !== 'object') {
+            throw new Error("busted " + path);
+        }
+        var cur = scope.objects[path];
+        if (!cur) {
+            range.push(true);
+            scope.objects[path] = [range];
+        } else {
+            scope.objects[path].push(range);
+        }
+    }
+
     var byName = {};
-    var objectScope = [];
-    var objectScopeStack = [];
     estraverse.traverse(esrefactorContext._syntax, {
         enter: function (node) {
+            var path;
             parents.push(node);
             var s = scopeManager.acquire(node);
             if (s) {
                 s.objects = {};
+                s.objectScope = [];
                 scopes.push(s);
                 scope = s;
             }
-            var addedScope = false;
             if (node.type == "ObjectExpression") {
                 if (isChild("init") && parentTypeIs("VariableDeclarator")) {
-                    addedScope = true;
-                    objectScope.push(parents[parents.length - 2].id.name);
+                    node.addedScope = true;
+                    scope.objectScope.push(parents[parents.length - 2].id.name);
                 } else if (isChild("value") && parentTypeIs("Property")) {
-                    addedScope = true;
-                    objectScope.push(parents[parents.length - 2].key.name);
+                    node.addedScope = true;
+                    scope.objectScope.push(parents[parents.length - 2].key.name);
                 }
             } else if (node.type == "MemberExpression") {
                 node.name = resolveName(node);
+                if (node.property.type == "Literal") {
+                    path = scope.objectScope.join(".");
+                    if (path)
+                        path += ".";
+                    path += node.name;
+                    add(path, node.property.range);
+                }
                 // log("got member expression", node.name, node.range);
             } else if (node.type == "Identifier") {
-                var path = objectScope.join(".");
+                path = scope.objectScope.join(".");
                 if (path)
                     path += ".";
                 if (parentTypeIs("MemberExpression") && isChild("property")) {
@@ -101,22 +130,14 @@ function indexFile(code, file, cb)
                 } else {
                     path += node.name;
                 }
-                var cur = scope.objects[path];
-                if (!cur) {
-                    var range = node.range;
-                    range.push(true);
-                    scope.objects[path] = [range];
-                } else {
-                    scope.objects[path].push(node.range);
-                }
+                add(path, node.range);
                 // log("identifier", path, JSON.stringify(node.range));
             }
-            objectScopeStack.push(addedScope);
         },
         leave: function (node) {
             parents.pop();
-            if (objectScopeStack.pop())
-                objectScope.pop();
+            if (node.addedScope)
+                scope.objectScope.pop();
             scope = scopeManager.release(node) || scope;
         }
     });
