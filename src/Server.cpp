@@ -1188,7 +1188,8 @@ void Server::startCompletion(const Path &path, int line, int column, int pos, co
     CXIndex index;
     CXTranslationUnit unit;
     List<String> args;
-    if (!project->fetchFromCache(path, args, index, unit)) {
+    int parseCount;
+    if (!project->fetchFromCache(path, args, index, unit, &parseCount)) {
         const SourceInformation info = project->sourceInfo(fileId);
         if (!info.isNull()) {
             project->reindex(path);
@@ -1201,7 +1202,7 @@ void Server::startCompletion(const Path &path, int line, int column, int pos, co
 
     mActiveCompletions.insert(path);
     shared_ptr<CompletionJob> job(new CompletionJob(project, isCompletionStream(conn) ? CompletionJob::Stream : CompletionJob::Sync));
-    job->init(index, unit, path, args, line, column, pos, contents);
+    job->init(index, unit, path, args, line, column, pos, contents, parseCount);
     job->setId(nextId());
     job->finished().connectAsync(this, &Server::onCompletionJobFinished);
     mPendingLookups[job->id()] = conn;

@@ -6,12 +6,12 @@
 
 CompletionJob::CompletionJob(const shared_ptr<Project> &project, Type type)
     : Job(WriteBuffered|WriteUnfiltered|QuietJob, project), mIndex(0), mUnit(0),
-      mLine(-1), mColumn(-1), mPos(-1), mType(type)
+      mLine(-1), mColumn(-1), mPos(-1), mParseCount(-1), mType(type)
 {
 }
 
 void CompletionJob::init(CXIndex index, CXTranslationUnit unit, const Path &path, const List<String> &args,
-                         int line, int column, int pos, const String &unsaved)
+                         int line, int column, int pos, const String &unsaved, int parseCount)
 {
     mIndex = index;
     mUnit = unit;
@@ -19,6 +19,7 @@ void CompletionJob::init(CXIndex index, CXTranslationUnit unit, const Path &path
     mArgs = args;
     mLine = line;
     mPos = pos;
+    mParseCount = parseCount;
     mColumn = column;
     mUnsaved = unsaved;
 }
@@ -138,6 +139,17 @@ void CompletionJob::execute()
     CXUnsavedFile unsavedFile = { mUnsaved.isEmpty() ? 0 : mPath.constData(),
                                   mUnsaved.isEmpty() ? 0 : mUnsaved.constData(),
                                   static_cast<unsigned long>(mUnsaved.size()) };
+    while (mParseCount < 3) {
+        if (clang_reparseTranslationUnit(mUnit, mUnsaved.isEmpty() ? 0 : 1,
+                                         &unsavedFile, clang_defaultReparseOptions(mUnit))) {
+            clang_disposeTranslationUnit(mUnit);
+            clang_disposeIndex(mIndex);
+            mFinished(mPath);
+            return;
+        } else {
+            ++mParseCount;
+        }
+    }
 
     CXCodeCompleteResults *results = clang_codeCompleteAt(mUnit, mPath.constData(), mLine, mColumn,
                                                           &unsavedFile, mUnsaved.isEmpty() ? 0 : 1,
@@ -224,7 +236,7 @@ void CompletionJob::execute()
         clang_disposeCodeCompleteResults(results);
         shared_ptr<Project> proj = project();
         if (proj)
-            proj->addToCache(mPath, mArgs, mIndex, mUnit);
+            proj->addToCache(mPath, mArgs, mIndex, mUnit, mParseCount);
     }
     mFinished(mPath);
 }

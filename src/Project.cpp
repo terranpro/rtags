@@ -206,7 +206,7 @@ void Project::onJobFinished(const shared_ptr<IndexerJob> &job)
                     if (it != mCachedUnits.end())
                         mCachedUnits.erase(it);
                     addCachedUnit(sourceInfo.sourceFile, sourceInfo.builds.at(i).args,
-                                  clangData->units.at(i).first, clangData->units.at(i).second);
+                                  clangData->units.at(i).first, clangData->units.at(i).second, 1);
                     clangData->units[i] = std::make_pair<CXIndex, CXTranslationUnit>(0, 0);
                 }
             }
@@ -694,7 +694,8 @@ DependencyMap Project::dependencies() const
     return mDependencies;
 }
 
-void Project::addCachedUnit(const Path &path, const List<String> &args, CXIndex index, CXTranslationUnit unit) // lock always held
+void Project::addCachedUnit(const Path &path, const List<String> &args, CXIndex index,
+                            CXTranslationUnit unit, int parseCount) // lock always held
 {
     assert(index);
     assert(unit);
@@ -727,7 +728,8 @@ LinkedList<CachedUnit*>::iterator Project::findCachedUnit(const Path &path, cons
 }
 
 bool Project::initJobFromCache(const Path &path, const List<String> &args,
-                               CXIndex &index, CXTranslationUnit &unit, List<String> *argsOut)
+                               CXIndex &index, CXTranslationUnit &unit, List<String> *argsOut,
+                               int *parseCount)
 {
     LinkedList<CachedUnit*>::iterator it = findCachedUnit(path, args);
     if (it != mCachedUnits.end()) {
@@ -744,19 +746,21 @@ bool Project::initJobFromCache(const Path &path, const List<String> &args,
     }
     index = 0;
     unit = 0;
+    if (parseCount)
+        *parseCount = -1;
     return false;
 }
 
-bool Project::fetchFromCache(const Path &path, List<String> &args, CXIndex &index, CXTranslationUnit &unit)
+bool Project::fetchFromCache(const Path &path, List<String> &args, CXIndex &index, CXTranslationUnit &unit, int *parseCount)
 {
     MutexLocker lock(&mMutex);
-    return initJobFromCache(path, List<String>(), index, unit, &args);
+    return initJobFromCache(path, List<String>(), index, unit, &args, parseCount);
 }
 
-void Project::addToCache(const Path &path, const List<String> &args, CXIndex index, CXTranslationUnit unit)
+void Project::addToCache(const Path &path, const List<String> &args, CXIndex index, CXTranslationUnit unit, int parseCount)
 {
     MutexLocker lock(&mMutex);
-    addCachedUnit(path, args, index, unit);
+    addCachedUnit(path, args, index, unit, parseCount);
 }
 
 void Project::addFixIts(const DependencyMap &visited, const FixItMap &fixIts) // lock always held
