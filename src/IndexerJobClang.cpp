@@ -317,7 +317,10 @@ CXChildVisitResult IndexerJobClang::indexVisitor(CXCursor cursor, CXCursor paren
     Location loc = job->createLocation(cursor, &blocked);
     if (blocked) {
         return CXChildVisit_Continue;
-    } else if (loc.isNull()) {
+    } else if (loc.isNull()) { // || (job->mSourceInformation.parsed && job->mHasErrors.contains(loc.fileId()))) {
+        // if (job->mHasErrors.contains(loc.fileId())) {
+        //     error() << "Skipped a cursor" << cursor;
+        // }
         return CXChildVisit_Recurse;
     }
 
@@ -926,7 +929,6 @@ bool IndexerJobClang::diagnose()
         return false;
     }
 
-    List<String> compilationErrors;
     const unsigned diagnosticCount = clang_getNumDiagnostics(data()->unit);
     const unsigned options = Server::instance()->options().options;
 
@@ -956,8 +958,6 @@ bool IndexerJobClang::diagnose()
         const Location loc = createLocation(diagLoc, 0);
         const uint32_t fileId = loc.fileId();
         if (mVisitedFiles.contains(fileId)) {
-            if (severity >= CXDiagnostic_Error)
-                ++mData->errors[fileId];
             const String msg = RTags::eatString(clang_getDiagnosticSpelling(diagnostic));
             if (xmlEnabled) {
                 const CXDiagnosticSeverity sev = clang_getDiagnosticSeverity(diagnostic);
@@ -1105,6 +1105,19 @@ bool IndexerJobClang::visit()
     if (isAborted())
         return false;
 
+    const unsigned diagnosticCount = clang_getNumDiagnostics(data()->unit);
+    for (unsigned i=0; i<diagnosticCount; ++i) {
+        CXDiagnostic diagnostic = clang_getDiagnostic(data()->unit, i);
+        const CXDiagnosticSeverity severity = clang_getDiagnosticSeverity(diagnostic);
+        if (severity >= CXDiagnostic_Error) {
+            const CXSourceLocation diagLoc = clang_getDiagnosticLocation(diagnostic);
+            const Location loc = createLocation(diagLoc, 0);
+            const uint32_t fileId = loc.fileId();
+            mHasErrors.insert(fileId);
+        }
+        clang_disposeDiagnostic(diagnostic);
+    }
+
     clang_visitChildren(clang_getTranslationUnitCursor(data()->unit),
                         IndexerJobClang::indexVisitor, this);
     if (isAborted())
@@ -1141,7 +1154,7 @@ void IndexerJobClang::index()
     } else {
         mParseTime = time(0);
         mContents = mSourceInformation.sourceFile.readAll();
-        if (!parse() || !visit() || !diagnose())
+        if (!parse() || !diagnose() || !visit())
             return;
 
         mData->message = mSourceInformation.sourceFile.toTilde();

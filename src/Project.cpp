@@ -212,6 +212,14 @@ void Project::onJobFinished(const shared_ptr<IndexerJob> &job)
             mJobs.remove(fileId);
 
             shared_ptr<IndexData> data = job->data();
+#if 0
+            for (Map<uint32_t, int>::const_iterator it = data->errors.begin(); it != data->errors.end(); ++it) {
+                assert(it->second);
+                mPendingDirtyFiles.erase(it->first);
+                error() << "Removing" << Location::path(it->first) << "because of" << it->second << "errors";
+            }
+#endif
+
             mPendingData[fileId] = data;
             if (data->type == IndexData::ClangType) {
                 shared_ptr<IndexDataClang> clangData = static_pointer_cast<IndexDataClang>(data);
@@ -550,6 +558,7 @@ void Project::startDirtyJobs()
         }
     }
     if (!indexed && !mPendingDirtyFiles.isEmpty()) {
+        // does this ever happen?
         RTags::dirtySymbols(mSymbols, mPendingDirtyFiles);
         RTags::dirtySymbolNames(mSymbolNames, mPendingDirtyFiles);
         RTags::dirtyUsr(mUsr, mPendingDirtyFiles);
@@ -597,25 +606,6 @@ static inline void writeUsr(const UsrMap &usr, UsrMap &current, SymbolMap &symbo
     }
 }
 
-static inline void writeErrorSymbols(const SymbolMap &symbols, ErrorSymbolMap &errorSymbols, const Map<uint32_t, int> &errors)
-{
-    for (Map<uint32_t, int>::const_iterator it = errors.begin(); it != errors.end(); ++it) {
-        if (it->second) {
-            SymbolMap &symbolsForFile = errorSymbols[it->first];
-            if (symbolsForFile.isEmpty()) {
-                const Location loc(it->first, 0);
-                SymbolMap::const_iterator sit = symbols.lower_bound(loc);
-                while (sit != symbols.end() && sit->first.fileId() == it->first) {
-                    symbolsForFile[sit->first] = sit->second;
-                    ++sit;
-                }
-            }
-        } else {
-            errorSymbols.remove(it->first);
-        }
-    }
-}
-
 static inline void writeSymbols(SymbolMap &symbols, SymbolMap &current)
 {
     if (!symbols.isEmpty()) {
@@ -654,9 +644,6 @@ int Project::syncDB()
     if (mPendingDirtyFiles.isEmpty() && mPendingData.isEmpty())
         return -1;
     StopWatch watch;
-    // for (Map<uint32_t, shared_ptr<IndexData> >::iterator it = mPendingData.begin(); it != mPendingData.end(); ++it) {
-    //     writeErrorSymbols(mSymbols, mErrorSymbols, it->second->errors);
-    // }
 
     if (!mPendingDirtyFiles.isEmpty()) {
         RTags::dirtySymbols(mSymbols, mPendingDirtyFiles);

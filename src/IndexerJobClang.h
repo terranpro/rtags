@@ -95,6 +95,7 @@ private:
     String mClangLine;
     CXCursor mLastCursor;
     String mContents;
+    Set<uint32_t> mHasErrors;
 };
 
 #endif

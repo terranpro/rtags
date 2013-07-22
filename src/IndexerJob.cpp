@@ -111,7 +111,6 @@ Location IndexerJob::createLocation(uint32_t fileId, uint32_t offset, bool *bloc
                 if (blocked)
                     *blocked = false;
                 mVisitedFiles.insert(fileId);
-                mData->errors[fileId] = 0;
             } else {
                 mBlockedFiles.insert(fileId);
                 if (blocked)
