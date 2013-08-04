@@ -11,8 +11,9 @@ endif ()
 find_package(LibClang REQUIRED)
 include_directories(${CLANG_INCLUDE})
 
-find_package(V8 REQUIRED)
 find_package(LevelDB)
+find_package(YAJL)
+find_package(V8)
 
 add_subdirectory(rct)
 include(${CMAKE_CURRENT_LIST_DIR}/rct/compiler.cmake)
@@ -76,7 +77,6 @@ set(RDM_SOURCES
   GccArguments.cpp
   IndexerJob.cpp
   JSONJob.cpp
-  JSONParser.cpp
   Job.cpp
   ListSymbolsJob.cpp
   Preprocessor.cpp
@@ -122,16 +122,26 @@ if (0 EQUAL 1)
     ${LEVELDB_LIBS})
 endif ()
 
+if (YAJL_FOUND EQUAL 1)
+  include_directories(${YAJL_INCLUDE})
+  list (APPEND SYSTEM_LIBS ${YAJL_LIBRARY})
+  list (APPEND RDM_SOURCES JSONParser.cpp)
+  add_definitions(-DHAVE_YAJL)
+elseif (V8_FOUND EQUAL 1)
+  include_directories(${V8_INCLUDE})
+  list (APPEND SYSTEM_LIBS ${V8_LIBS})
+  list (APPEND RDM_SOURCES JSONParser.cpp)
+  add_definitions(-DHAVE_V8)
+endif ()
+
 add_library(rtags SHARED ${RDM_SOURCES})
-target_link_libraries(rtags ${CLANG_LIBS} ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} shared rct ${SYSTEM_LIBS} ${V8_LIBS})
+target_link_libraries(rtags ${CLANG_LIBS} ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} shared rct ${SYSTEM_LIBS})
 add_dependencies(rtags rct)
 
 add_executable(rdm rdm.cpp)
 target_link_libraries(rdm rtags shared)
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
-
-include_directories(${V8_INCLUDE})
 
 add_library(rtagsclang MODULE IndexerJobClang.cpp)
 add_dependencies(rtagsclang rdm)
