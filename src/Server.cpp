@@ -273,37 +273,9 @@ void Server::onNewMessage(Message *message, Connection *connection)
 void Server::handleCompileMessage(const CompileMessage &message, Connection *conn)
 {
     conn->finish(); // nothing to wait for
-    Path path = message.arguments();
-    if (path.endsWith(".js") && !path.contains(' ')) {
-        if (mOptions.options & NoEsprima)
-            return;
-        if (!path.isAbsolute())
-            path.prepend(message.path());
-        const Path srcRoot = RTags::findProjectRoot(path);
-        if (srcRoot.isEmpty()) {
-            error() << "Can't find project root for" << path;
-            return;
-        }
-        {
-            MutexLocker lock(&mMutex);
-
-            shared_ptr<Project> project = mProjects.value(srcRoot);
-            if (!project) {
-                project = addProject(srcRoot);
-                assert(project);
-            }
-            loadProject(project);
-
-            if (!mCurrentProject.lock())
-                mCurrentProject = project;
-
-            project->index(path.resolved());
-        }
-    } else {
-        GccArguments args;
-        if (args.parse(message.arguments(), message.path()))
-            index(args, message.projects());
-    }
+    GccArguments args;
+    if (args.parse(message.arguments(), message.path()))
+        index(args, message.projects());
 }
 
 void Server::handleCreateOutputMessage(const CreateOutputMessage &message, Connection *conn)

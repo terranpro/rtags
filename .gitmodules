@@ -1,21 +1,9 @@
 [submodule "src/rct"]
 	path = src/rct
 	url = https://github.com/Andersbakken/rct
-[submodule "src/esprima"]
-	path = src/esprima
-	url = git://github.com/ariya/esprima.git
 [submodule "src/auto-complete"]
 	path = src/auto-complete
 	url = git://github.com/auto-complete/auto-complete.git
-[submodule "src/escope"]
-	path = src/escope
-	url = https://github.com/Constellation/escope.git
-[submodule "src/esrefactor"]
-	path = src/esrefactor
-	url = https://github.com/ariya/esrefactor.git
-[submodule "src/estraverse"]
-	path = src/estraverse
-	url = https://github.com/Constellation/estraverse.git
 [submodule "src/dtl-cpp"]
 	path = src/dtl-cpp
 	url = https://code.google.com/p/dtl-cpp/

@@ -27,7 +27,6 @@ add_definitions(-Wall)
 add_definitions("-DCLANG_INCLUDEPATH=\"${CLANG_SYSTEM_INCLUDE}\"")
 add_definitions("-DCLANG_VERSION_MAJOR=${CLANG_VERSION_MAJOR}")
 add_definitions("-DCLANG_VERSION_MINOR=${CLANG_VERSION_MINOR}")
-add_definitions("-DESPRIMA_JS=\"${PROJECT_SOURCE_DIR}/src/rtags-esprima.js\"")
 add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -133,20 +132,6 @@ target_link_libraries(rdm rtags shared)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
 
 include_directories(${V8_INCLUDE})
-if (V8_DISPOSE_HAS_ISOLATE)
-  add_definitions(-DV8_DISPOSE_HAS_ISOLATE)
-endif ()
-add_custom_target(OUTPUT ${PROJECT_SOURCE_DIR}/src/rtags-esprima.js
-  COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/concat-js.sh
-  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/estraverse/estraverse.js
-          ${CMAKE_CURRENT_SOURCE_DIR}/escope/escope.js
-          ${CMAKE_CURRENT_SOURCE_DIR}/esrefactor/lib/esrefactor.js
-          ${CMAKE_CURRENT_SOURCE_DIR}/rtags.js
-)
-
-add_library(rtagsesprima MODULE IndexerJobEsprima.cpp JSParser.cpp)
-add_dependencies(rtagsesprima rtags)
-target_link_libraries(rtagsesprima rtags)
 
 add_library(rtagsclang MODULE IndexerJobClang.cpp)
 add_dependencies(rtagsclang rdm)
