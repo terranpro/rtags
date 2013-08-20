@@ -435,6 +435,7 @@ public:
     const String args;
     virtual bool exec(RClient *rc, Connection *connection)
     {
+        printf("About to compile %s\n", args.c_str());
         CompileMessage msg(cwd, args);
         msg.init(rc->argc(), rc->argv());
         msg.setProjects(rc->projects());
@@ -535,6 +536,7 @@ bool RClient::exec()
     }
     mCommands.clear();
     ret = ret && (!requiresNon0Output || monitor.gotNon0Output);
+    printf("Returning %d\n", ret);
     return ret;
 }
 

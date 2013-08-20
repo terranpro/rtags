@@ -289,6 +289,7 @@ void Server::handleCompileMessage(const CompileMessage &message, Connection *con
     conn->finish(); // nothing to wait for
     const Path workingDirectory = message.workingDirectory();
     const String arguments = message.arguments();
+    printf("handleCompileMessage %s\n", args.constData());
     const List<String> projects = message.projects();
     assert(message.workingDirectory().endsWith('/'));
     if (arguments.endsWith(".js") && !arguments.contains(' ')) {
