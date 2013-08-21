@@ -1378,16 +1378,17 @@ void Server::startCompletion(const Path &path, int line, int column, int pos, co
     CXTranslationUnit unit;
     List<String> args;
     int parseCount = 0;
-    if (!project->fetchFromCache(path, args, unit, &parseCount)) {
-        const SourceInformation info = project->sourceInfo(fileId);
-        if (info.isNull() || info.isJS()) {
-            if (!isCompletionStream(conn))
-                conn->finish();
-            return;
-        }
-        assert(!info.args.isEmpty());
-        args = info.args;
-    }
+#warning needs to be done
+    // if (!project->fetchFromCache(path, args, unit, &parseCount)) {
+    //     const SourceInformation info = project->sourceInfo(fileId);
+    //     if (info.isNull() || info.isJS()) {
+    //         if (!isCompletionStream(conn))
+    //             conn->finish();
+    //         return;
+    //     }
+    //     assert(!info.args.isEmpty());
+    //     args = info.args;
+    // }
 
     mActiveCompletions.insert(path);
     std::shared_ptr<CompletionJob> job(new CompletionJob(project, isCompletionStream(conn) ? CompletionJob::Stream : CompletionJob::Sync));

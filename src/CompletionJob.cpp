@@ -268,7 +268,8 @@ void CompletionJob::execute()
         std::shared_ptr<Project> proj = project();
         if (proj) {
             // error() << "Adding to cache" << mParseCount << mPath;
-            proj->addToCache(mPath, mArgs, mUnit, mParseCount);
+            // proj->addToCache(mPath, mArgs, mUnit, mParseCount);
+            #warning needs to be done
         }
     }
     mFinished(mPath, id());

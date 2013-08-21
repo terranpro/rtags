@@ -134,6 +134,7 @@ int TranslationUnitCache::size() const
     std::lock_guard<std::mutex> lock(mMutex);
     return mUnits.size();
 }
+
 void TranslationUnitCache::moveToEnd(CachedUnit *unit) // lock always held
 {
     assert(unit);
@@ -150,4 +151,14 @@ void TranslationUnitCache::moveToEnd(CachedUnit *unit) // lock always held
         mLast->next = unit->prev;
         mLast = unit;
     }
+}
+List<SourceInformation> TranslationUnitCache::sourceInformations() const
+{
+    std::lock_guard<std::mutex> lock(mMutex);
+    List<SourceInformation> ret;
+    ret.reserve(mUnits.size());
+    for (CachedUnit *unit = mFirst; unit; unit = unit->next) {
+        ret.append(unit->translationUnit->sourceInformation());
+    }
+    return ret;
 }

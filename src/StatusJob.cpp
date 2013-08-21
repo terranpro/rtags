@@ -155,9 +155,9 @@ void StatusJob::execute()
         write(delimiter);
         write("cachedUnits");
         write(delimiter);
-        const List<std::pair<Path, List<String> > > caches = proj->cachedUnits();
-        for (List<std::pair<Path, List<String> > >::const_iterator it = caches.begin(); it != caches.end(); ++it) {
-            write<512>("  %s: %s", it->first.constData(), String::join(it->second, " ").constData());
+        const List<SourceInformation> caches = proj->translationUnitCache()->sourceInformations();
+        for (List<SourceInformation>::const_iterator it = caches.begin(); it != caches.end(); ++it) {
+            write<512>("  %s", it->toString().constData());
         }
     }
 }

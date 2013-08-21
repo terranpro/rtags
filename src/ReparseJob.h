@@ -24,7 +24,8 @@ public:
         if (mUnit) {
             std::shared_ptr<Project> project = mProject.lock();
             if (project) {
-                project->addToCache(mPath, mArgs, mUnit, 2);
+                #warning not done
+                // project->addToCache(mPath, mArgs, mUnit, 2);
                 // error() << "Did a reparse" << mPath;
                 mUnit = 0;
             }

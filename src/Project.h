@@ -10,31 +10,10 @@
 #include <rct/RegExp.h>
 #include <rct/FileSystemWatcher.h>
 #include "IndexerJob.h"
+#include "TranslationUnitCache.h"
 #include <mutex>
 #include <memory>
 
-struct CachedUnit
-{
-    CachedUnit()
-        : unit(0), parseCount(0)
-    {}
-    ~CachedUnit()
-    {
-        clear();
-    }
-    void clear()
-    {
-        if (unit) {
-            clang_disposeTranslationUnit(unit);
-            unit = 0;
-        }
-
-    }
-    CXTranslationUnit unit;
-    Path path;
-    List<String> arguments;
-    int parseCount;
-};
 
 class FileManager;
 class IndexerJob;
@@ -105,24 +84,18 @@ public:
     SourceInformationMap sources() const;
     DependencyMap dependencies() const;
     Set<Path> watchedPaths() const { return mWatchedPaths; }
-    bool fetchFromCache(const Path &path, List<String> &args, CXTranslationUnit &unit, int *parseCount);
-    void addToCache(const Path &path, const List<String> &args, CXTranslationUnit unit, int parseCount);
+    TranslationUnitCache *translationUnitCache() { return &mTranslationUnitCache; }
     void onTimerFired(Timer* event);
     bool isIndexing() const { std::lock_guard<std::mutex> lock(mMutex); return !mJobs.isEmpty(); }
     void onJSFilesAdded();
-    List<std::pair<Path, List<String> > > cachedUnits() const;
 private:
     void index(const SourceInformation &args, IndexerJob::Type type);
     void reloadFileManager();
-    bool initJobFromCache(const Path &path, const List<String> &args,
-                          CXTranslationUnit &unit, List<String> *argsOut, int *parseCount);
-    LinkedList<CachedUnit*>::iterator findCachedUnit(const Path &path, const List<String> &args);
     void onFileModified(const Path &);
     void addDependencies(const DependencyMap &hash, Set<uint32_t> &newFiles);
     void addFixIts(const DependencyMap &dependencies, const FixItMap &fixIts);
     void syncDB();
     void startDirtyJobs(const Set<uint32_t> &files);
-    void addCachedUnit(const Path &path, const List<String> &args, CXTranslationUnit unit, int parseCount);
     bool save();
     void onValidateDBJobErrors(const Set<Location> &errors);
 
@@ -174,7 +147,7 @@ private:
     Map<uint32_t, std::shared_ptr<IndexData> > mPendingData;
     Set<uint32_t> mPendingDirtyFiles;
 
-    LinkedList<CachedUnit*> mCachedUnits;
+    TranslationUnitCache mTranslationUnitCache;
     Set<uint32_t> mSuspendedFiles;
 };
 

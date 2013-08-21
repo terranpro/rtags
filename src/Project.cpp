@@ -44,7 +44,7 @@ private:
 };
 
 Project::Project(const Path &path)
-    : mPath(path), mState(Unloaded), mJobCounter(0)
+    : mPath(path), mState(Unloaded), mJobCounter(0), mTranslationUnitCache(Server::instance()->options().completionCacheSize)
 {
     mWatcher.modified().connect(std::bind(&Project::onFileModified, this, std::placeholders::_1));
     mWatcher.removed().connect(std::bind(&Project::onFileModified, this, std::placeholders::_1));
@@ -223,11 +223,7 @@ void Project::unload()
     mDependencies.clear();
     mPendingCompiles.clear();
     mPendingJobs.clear();
-
-    for (LinkedList<CachedUnit*>::const_iterator it = mCachedUnits.begin(); it != mCachedUnits.end(); ++it) {
-        delete *it;
-    }
-    mCachedUnits.clear();
+    mTranslationUnitCache.clear();
     mState = Unloaded;
 }
 
@@ -289,7 +285,8 @@ void Project::onJobFinished(const std::shared_ptr<IndexerJob> &job)
                         clangData->unit = 0;
                         Server::instance()->startIndexerJob(rj);
                     } else {
-                        addCachedUnit(sourceInfo.sourceFile(), sourceInfo.args, clangData->unit, 1);
+#warning not done
+                        //addCachedUnit(sourceInfo.sourceFile(), sourceInfo.args, clangData->unit, 1);
                         clangData->unit = 0;
                     }
                 }
@@ -810,71 +807,6 @@ DependencyMap Project::dependencies() const
     return mDependencies;
 }
 
-void Project::addCachedUnit(const Path &path, const List<String> &args, CXTranslationUnit unit, int parseCount) // lock always held
-{
-    assert(unit);
-    const int maxCacheSize = Server::instance()->options().completionCacheSize;
-    if (!maxCacheSize) {
-        clang_disposeTranslationUnit(unit);
-        return;
-    }
-    CachedUnit *cachedUnit = new CachedUnit;
-    cachedUnit->path = path;
-    cachedUnit->unit = unit;
-    cachedUnit->arguments = args;
-    cachedUnit->parseCount = parseCount;
-    mCachedUnits.push_back(cachedUnit);
-    while (mCachedUnits.size() > maxCacheSize) {
-        CachedUnit *unit = *mCachedUnits.begin();
-        delete unit;
-        mCachedUnits.erase(mCachedUnits.begin());
-    }
-}
-
-LinkedList<CachedUnit*>::iterator Project::findCachedUnit(const Path &path, const List<String> &args)
-{
-    for (LinkedList<CachedUnit*>::iterator it = mCachedUnits.begin(); it != mCachedUnits.end(); ++it) {
-        if ((*it)->path == path && (args.isEmpty() || args == (*it)->arguments))
-            return it;
-    }
-    return mCachedUnits.end();
-}
-
-bool Project::initJobFromCache(const Path &path, const List<String> &args,
-                               CXTranslationUnit &unit, List<String> *argsOut,
-                               int *parseCount)
-{
-    LinkedList<CachedUnit*>::iterator it = findCachedUnit(path, args);
-    if (it != mCachedUnits.end()) {
-        CachedUnit *cachedUnit = *it;
-        unit = cachedUnit->unit;
-        cachedUnit->unit = 0;
-        if (argsOut)
-            *argsOut = cachedUnit->arguments;
-        mCachedUnits.erase(it);
-        if (parseCount)
-            *parseCount = cachedUnit->parseCount;
-        delete cachedUnit;
-        return true;
-    }
-    unit = 0;
-    if (parseCount)
-        *parseCount = -1;
-    return false;
-}
-
-bool Project::fetchFromCache(const Path &path, List<String> &args, CXTranslationUnit &unit, int *parseCount)
-{
-    std::lock_guard<std::mutex> lock(mMutex);
-    return initJobFromCache(path, List<String>(), unit, &args, parseCount);
-}
-
-void Project::addToCache(const Path &path, const List<String> &args, CXTranslationUnit unit, int parseCount)
-{
-    std::lock_guard<std::mutex> lock(mMutex);
-    addCachedUnit(path, args, unit, parseCount);
-}
-
 void Project::addFixIts(const DependencyMap &visited, const FixItMap &fixIts) // lock always held
 {
     for (DependencyMap::const_iterator it = visited.begin(); it != visited.end(); ++it) {
@@ -937,14 +869,4 @@ void Project::onJSFilesAdded()
 void Project::reloadFileManager()
 {
     fileManager->reload(FileManager::Asynchronous);
-}
-
-List<std::pair<Path, List<String> > > Project::cachedUnits() const
-{
-    std::lock_guard<std::mutex> lock(mMutex);
-    List<std::pair<Path, List<String> > > ret;
-
-    for (LinkedList<CachedUnit*>::const_iterator it = mCachedUnits.begin(); it != mCachedUnits.end(); ++it)
-        ret.append(std::make_pair((*it)->path, (*it)->arguments));
-    return ret;
 }

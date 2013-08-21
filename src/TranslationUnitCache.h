@@ -55,6 +55,7 @@ public:
 
     int maxSize() const { return mMaxSize; }
     int size() const;
+    List<SourceInformation> sourceInformations() const;
 private:
     void purge();
     struct CachedUnit {
