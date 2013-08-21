@@ -51,12 +51,20 @@ TranslationUnitCache::TranslationUnitCache(int size)
 
 TranslationUnitCache::~TranslationUnitCache()
 {
+    clear();
+}
+
+void TranslationUnitCache::clear()
+{
+    std::lock_guard<std::mutex> lock(mMutex);
     CachedUnit *unit = mFirst;
     while (unit) {
         CachedUnit *tmp = unit;
         unit = unit->next;
         delete tmp;
     }
+    mFirst = mLast = 0;
+    mUnits.clear();
 }
 
 std::shared_ptr<TranslationUnit> TranslationUnitCache::find(uint32_t fileId)
@@ -83,19 +91,25 @@ std::shared_ptr<TranslationUnit> TranslationUnitCache::get(const SourceInformati
     return std::shared_ptr<TranslationUnit>();
 }
 
-void TranslationUnitCache::insert(const std::shared_ptr<TranslationUnit> &unit)
+void TranslationUnitCache::insert(const std::shared_ptr<TranslationUnit> &translationUnit)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    CachedUnit *cachedUnit = new CachedUnit;
-    cachedUnit->translationUnit = unit;
-    cachedUnit->next = 0;
-    cachedUnit->prev = mLast;
+    CachedUnit *&unit = mUnits[translationUnit->sourceInformation().fileId];
+    if (unit) {
+        unit->translationUnit = translationUnit;
+        moveToEnd(unit);
+        return;
+    }
+    unit = new CachedUnit;
+    unit->translationUnit = translationUnit;
+    unit->next = 0;
+    unit->prev = mLast;
     if (mLast) {
-        mLast->next = cachedUnit;
-        mLast = cachedUnit;
+        mLast->next = unit;
+        mLast = unit;
     } else {
         assert(!mFirst);
-        mFirst = mLast = cachedUnit;
+        mFirst = mLast = unit;
     }
     purge();
 }

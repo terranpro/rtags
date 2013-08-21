@@ -47,6 +47,8 @@ public:
     TranslationUnitCache(int size);
     ~TranslationUnitCache();
 
+    void clear();
+
     std::shared_ptr<TranslationUnit> find(uint32_t fileId);
     std::shared_ptr<TranslationUnit> get(const SourceInformation &info);
     void insert(const std::shared_ptr<TranslationUnit> &unit);
