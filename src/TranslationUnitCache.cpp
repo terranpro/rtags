@@ -62,32 +62,46 @@ TranslationUnitCache::~TranslationUnitCache()
 std::shared_ptr<TranslationUnit> TranslationUnitCache::find(uint32_t fileId)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    if (CachedUnit *unit = mUnits.value(fileId))
+    if (CachedUnit *unit = mUnits.value(fileId)) {
+        moveToEnd(unit);
         return unit->translationUnit;
+    }
     return std::shared_ptr<TranslationUnit>();
 }
 
 std::shared_ptr<TranslationUnit> TranslationUnitCache::get(const SourceInformation &info)
 {
     std::lock_guard<std::mutex> lock(mMutex);
-    uint32_t fileId = Location::insertFile(info.sourceFile);
-    CachedUnit *unit = mUnits.value(fileId);
+    CachedUnit *unit = mUnits.value(info.fileId);
     if (unit) {
         const SourceInformation s = unit->translationUnit->sourceInformation();
-        if (s.compiler == info.compiler && s.args == info.args)
+        if (s.compiler == info.compiler && s.args == info.args) {
+            moveToEnd(unit);
             return unit->translationUnit;
+        }
     }
     return std::shared_ptr<TranslationUnit>();
 }
 
 void TranslationUnitCache::insert(const std::shared_ptr<TranslationUnit> &unit)
 {
-
+    std::lock_guard<std::mutex> lock(mMutex);
+    CachedUnit *cachedUnit = new CachedUnit;
+    cachedUnit->translationUnit = unit;
+    cachedUnit->next = 0;
+    cachedUnit->prev = mLast;
+    if (mLast) {
+        mLast->next = cachedUnit;
+        mLast = cachedUnit;
+    } else {
+        assert(!mFirst);
+        mFirst = mLast = cachedUnit;
+    }
+    purge();
 }
 
-void TranslationUnitCache::purge()
+void TranslationUnitCache::purge() // lock always held
 {
-    std::lock_guard<std::mutex> lock(mMutex);
     while (mUnits.size() > mMaxSize) {
         CachedUnit *tmp = mFirst;
         mFirst = tmp->next;
@@ -105,4 +119,21 @@ int TranslationUnitCache::size() const
 {
     std::lock_guard<std::mutex> lock(mMutex);
     return mUnits.size();
+}
+void TranslationUnitCache::moveToEnd(CachedUnit *unit) // lock always held
+{
+    assert(unit);
+    assert(mLast);
+    if (unit != mLast) {
+        if (unit->prev) {
+            unit->prev->next = unit->next;
+        } else {
+            mFirst = unit->next;
+        }
+        unit->next->prev = unit->prev;
+        unit->next = 0;
+        unit->prev = mLast;
+        mLast->next = unit->prev;
+        mLast = unit;
+    }
 }

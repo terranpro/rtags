@@ -56,14 +56,12 @@ public:
 private:
     void purge();
     struct CachedUnit {
-        List<String> args;
-        Path compiler;
         std::shared_ptr<TranslationUnit> translationUnit;
-        uint32_t fileId;
         CachedUnit *prev, *next;
     };
+    void moveToEnd(CachedUnit *unit);
 
-    std::mutex mMutex;
+    mutable std::mutex mMutex;
     CachedUnit *mFirst, *mLast;
     const int mMaxSize;
     Map<uint32_t, CachedUnit*> mUnits;
